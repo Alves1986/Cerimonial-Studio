@@ -8,9 +8,10 @@ interface SidebarProps {
   setActivePage: (page: string) => void;
   isOpen?: boolean;
   setIsOpen?: (isOpen: boolean) => void;
+  userPlan?: string;
 }
 
-export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen }: SidebarProps) {
+export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, userPlan }: SidebarProps) {
   const navItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard, group: 'Principal' },
     { id: 'casais', label: 'Meus Casais', icon: Users, group: 'Principal' },
@@ -20,6 +21,7 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen }
     { id: 'roteiros', label: 'Roteiros de Fala', icon: MessageSquare, group: 'Referência' },
     { id: 'emergencias', label: 'Guia de Imprevistos', icon: AlertTriangle, group: 'Referência' },
     { id: 'perfil', label: 'Perfil', icon: User, group: 'Configurações' },
+    { id: 'pricing', label: 'Assinatura', icon: Heart, group: 'Configurações' },
   ];
 
   const groups = Array.from(new Set(navItems.map(item => item.group)));
@@ -70,6 +72,22 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen }
       </nav>
 
       <div className="p-6 border-t border-divider">
+        {userPlan && (
+          <div className="mb-4 p-3 bg-ivory border border-divider rounded-lg">
+            <div className="text-[10px] font-bold text-stone uppercase tracking-widest mb-1">Seu Plano</div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-rose-dark capitalize">{userPlan}</span>
+              {userPlan === 'free' && (
+                <button 
+                  onClick={() => setActivePage('pricing')}
+                  className="text-[10px] text-rose hover:underline font-bold uppercase"
+                >
+                  Upgrade
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-2 py-2 text-sm text-stone hover:text-red-500 transition-colors"

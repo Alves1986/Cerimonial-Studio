@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Couple } from '../types/database';
-import { Loader2, Printer, Save, ChevronRight, ChevronLeft, Download, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Printer, Save, ChevronRight, ChevronLeft, Download, Plus, Trash2, Lock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -16,7 +16,7 @@ const getInitialProfile = () => {
   return {};
 };
 
-export default function Contrato() {
+export default function Contrato({ userPlan, onUpgrade }: { userPlan: string, onUpgrade: () => void }) {
   const [couples, setCouples] = useState<Couple[]>([]);
   const [selectedCoupleId, setSelectedCoupleId] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -260,6 +260,27 @@ export default function Contrato() {
 
   if (loading) {
     return <div className="flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-rose" /></div>;
+  }
+
+  if (userPlan !== 'Plano Pro') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 bg-white border border-divider rounded-2xl shadow-sm animate-page-in">
+        <div className="w-20 h-20 bg-blush rounded-full flex items-center justify-center mb-6">
+          <Lock className="text-rose w-10 h-10" />
+        </div>
+        <h3 className="font-display text-2xl text-ink mb-3">Funcionalidade Exclusiva</h3>
+        <p className="text-stone font-light text-center max-w-md mb-8">
+          A geração de contratos personalizados é um recurso exclusivo do <strong>Plano Pro</strong>. 
+          Faça o upgrade agora para profissionalizar seus atendimentos!
+        </p>
+        <button
+          onClick={onUpgrade}
+          className="bg-rose hover:bg-rose-dark text-white font-bold py-3 px-10 rounded-xl transition-all shadow-lg shadow-rose/20 uppercase text-sm tracking-widest"
+        >
+          Fazer Upgrade para Pro
+        </button>
+      </div>
+    );
   }
 
   return (

@@ -6,11 +6,19 @@ import { ptBR } from 'date-fns/locale';
 import { Plus, Heart, Trash2, Edit2, Loader2, Phone, MapPin, Users as UsersIcon, Calendar } from 'lucide-react';
 import { cn } from '../lib/utils';
 
-export default function Couples() {
+export default function Couples({ userPlan }: { userPlan: string }) {
   const [couples, setCouples] = useState<Couple[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingCouple, setEditingCouple] = useState<Couple | null>(null);
+
+  const getLimit = () => {
+    if (userPlan === 'Plano Pro') return Infinity;
+    if (userPlan === 'Plano Básico') return 10;
+    return 3;
+  };
+
+  const isLimitReached = couples.length >= getLimit();
 
   useEffect(() => {
     fetchCouples();
@@ -60,7 +68,14 @@ export default function Couples() {
           <p className="text-stone text-sm font-light mt-1">Gerencie contratos, checklists e planners vinculados</p>
         </div>
         <button
-          onClick={() => { setEditingCouple(null); setShowModal(true); }}
+          onClick={() => { 
+            if (!editingCouple && isLimitReached) {
+              alert(`Seu plano atual (${userPlan}) permite até ${getLimit()} casais. Faça o upgrade para cadastrar mais!`);
+              return;
+            }
+            setEditingCouple(null); 
+            setShowModal(true); 
+          }}
           className="bg-rose hover:bg-rose-dark text-white font-bold py-2 px-6 rounded-lg transition-all flex items-center gap-2 uppercase text-xs tracking-wider"
         >
           <Plus className="w-4 h-4" /> Novo Casal

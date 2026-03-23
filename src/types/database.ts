@@ -68,3 +68,11 @@ export interface Contract {
   data: any; // Flexible JSON for contract fields
   created_at: string;
 }
+
+export interface Roteiro {
+  id: string;
+  couple_id: string;
+  user_id: string;
+  data: Array<{ title: string; text: string }>;
+  updated_at: string;
+}

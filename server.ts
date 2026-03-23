@@ -109,8 +109,8 @@ async function startServer() {
             supabase_user_id: userId
           }
         },
-        success_url: `${req.protocol}://${req.get('host')}/dashboard`,
-        cancel_url: `${req.protocol}://${req.get('host')}/pricing`
+        success_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/dashboard`,
+        cancel_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/pricing`
       });
 
       res.json({ sessionId: session.id, url: session.url });

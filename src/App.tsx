@@ -11,6 +11,7 @@ import Contrato from './components/Contrato';
 import Roteiros from './components/Roteiros';
 import Emergencias from './components/Emergencias';
 import Profile from './components/Profile';
+import Pricing from './components/Pricing';
 import { Loader2, Menu, X } from 'lucide-react';
 
 export default function App() {
@@ -18,19 +19,35 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [userPlan, setUserPlan] = useState<string>('free');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session?.user) {
+        fetchUserPlan(session.user.id);
+      }
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user) {
+        fetchUserPlan(session.user.id);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchUserPlan = async (userId: string) => {
+    try {
+      const { data: plan } = await supabase.rpc('get_user_plan', { user_uuid: userId });
+      setUserPlan(plan || 'free');
+    } catch (error) {
+      console.error('Error fetching plan:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -49,19 +66,21 @@ export default function App() {
       case 'dashboard':
         return <Dashboard onNavigate={setActivePage} />;
       case 'casais':
-        return <Couples />;
+        return <Couples userPlan={userPlan} />;
       case 'planner':
         return <Planner />;
       case 'checklist':
         return <Checklist />;
       case 'contrato':
-        return <Contrato />;
+        return <Contrato userPlan={userPlan} onUpgrade={() => setActivePage('pricing')} />;
       case 'roteiros':
-        return <Roteiros />;
+        return <Roteiros userPlan={userPlan} onUpgrade={() => setActivePage('pricing')} />;
       case 'emergencias':
         return <Emergencias />;
       case 'perfil':
         return <Profile />;
+      case 'pricing':
+        return <Pricing />;
       default:
         return <Dashboard onNavigate={setActivePage} />;
     }
@@ -82,7 +101,13 @@ export default function App() {
         </button>
       </div>
 
-      <Sidebar activePage={activePage} setActivePage={setActivePage} isOpen={isMobileMenuOpen} setIsOpen={setIsMobileMenuOpen} />
+      <Sidebar 
+        activePage={activePage} 
+        setActivePage={setActivePage} 
+        isOpen={isMobileMenuOpen} 
+        setIsOpen={setIsMobileMenuOpen} 
+        userPlan={userPlan}
+      />
       
       {/* Overlay for mobile */}
       {isMobileMenuOpen && (
