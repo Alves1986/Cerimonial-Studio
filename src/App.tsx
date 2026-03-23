@@ -5,6 +5,11 @@ import Auth from './components/Auth';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Couples from './components/Couples';
+import Planner from './components/Planner';
+import Checklist from './components/Checklist';
+import Contrato from './components/Contrato';
+import Roteiros from './components/Roteiros';
+import Emergencias from './components/Emergencias';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -44,55 +49,15 @@ export default function App() {
       case 'casais':
         return <Couples />;
       case 'planner':
-        return (
-          <div className="animate-page-in">
-            <h2 className="text-3xl font-display font-medium text-ink mb-2">Planner do Evento</h2>
-            <p className="text-stone text-sm font-light mb-8">Monte o cronograma completo do grande dia</p>
-            <div className="bg-white p-12 rounded-2xl border border-divider text-center text-stone">
-              Funcionalidade em desenvolvimento...
-            </div>
-          </div>
-        );
+        return <Planner />;
       case 'checklist':
-        return (
-          <div className="animate-page-in">
-            <h2 className="text-3xl font-display font-medium text-ink mb-2">Checklist</h2>
-            <p className="text-stone text-sm font-light mb-8">Acompanhe cada etapa antes e durante o evento</p>
-            <div className="bg-white p-12 rounded-2xl border border-divider text-center text-stone">
-              Funcionalidade em desenvolvimento...
-            </div>
-          </div>
-        );
+        return <Checklist />;
       case 'contrato':
-        return (
-          <div className="animate-page-in">
-            <h2 className="text-3xl font-display font-medium text-ink mb-2">Gerar Contrato</h2>
-            <p className="text-stone text-sm font-light mb-8">Preencha os dados para gerar o contrato personalizado</p>
-            <div className="bg-white p-12 rounded-2xl border border-divider text-center text-stone">
-              Funcionalidade em desenvolvimento...
-            </div>
-          </div>
-        );
+        return <Contrato />;
       case 'roteiros':
-        return (
-          <div className="animate-page-in">
-            <h2 className="text-3xl font-display font-medium text-ink mb-2">Roteiros de Fala</h2>
-            <p className="text-stone text-sm font-light mb-8">Textos de referência para cada momento da cerimônia</p>
-            <div className="bg-white p-12 rounded-2xl border border-divider text-center text-stone">
-              Funcionalidade em desenvolvimento...
-            </div>
-          </div>
-        );
+        return <Roteiros />;
       case 'emergencias':
-        return (
-          <div className="animate-page-in">
-            <h2 className="text-3xl font-display font-medium text-ink mb-2">Guia de Imprevistos</h2>
-            <p className="text-stone text-sm font-light mb-8">Como conduzir situações inesperadas com serenidade</p>
-            <div className="bg-white p-12 rounded-2xl border border-divider text-center text-stone">
-              Funcionalidade em desenvolvimento...
-            </div>
-          </div>
-        );
+        return <Emergencias />;
       default:
         return <Dashboard onNavigate={setActivePage} />;
     }
