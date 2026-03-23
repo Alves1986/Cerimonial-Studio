@@ -1,10 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Couple } from '../types/database';
-import { Loader2, Printer, Save, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Loader2, Printer, Save, ChevronRight, ChevronLeft, Download, Plus, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+// @ts-ignore
+import html2pdf from 'html2pdf.js';
+
+const getInitialProfile = () => {
+  try {
+    const saved = localStorage.getItem('cerimonialista_profile');
+    if (saved) return JSON.parse(saved);
+  } catch (e) {}
+  return {};
+};
 
 export default function Contrato() {
   const [couples, setCouples] = useState<Couple[]>([]);
@@ -13,15 +23,17 @@ export default function Contrato() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('dados');
 
+  const initialProfile = getInitialProfile();
+
   // Form state
   const [formData, setFormData] = useState({
     // Contratado
-    nome_cont: '',
-    cpf_cont: '',
-    end_cont: '',
-    cidade_cont: 'Telêmaco Borba / PR',
-    tel_cont: '',
-    email_cont: '',
+    nome_cont: initialProfile.nome_cont || '',
+    cpf_cont: initialProfile.cpf_cont || '',
+    end_cont: initialProfile.end_cont || '',
+    cidade_cont: initialProfile.cidade_cont || 'Telêmaco Borba / PR',
+    tel_cont: initialProfile.tel_cont || '',
+    email_cont: initialProfile.email_cont || '',
     
     // Contratantes
     nome1: '',
@@ -53,7 +65,8 @@ export default function Contrato() {
     p3_valor: '', p3_data: '', p3_forma: 'PIX',
     banco: '',
     remarcacao: '',
-    foro: 'Telêmaco Borba'
+    foro: 'Telêmaco Borba',
+    fornecedores: [] as { empresa: string, email: string, whatsapp: string }[]
   });
 
   const PKGS: Record<string, string> = {
@@ -86,8 +99,15 @@ export default function Contrato() {
       fetchContractData(selectedCoupleId);
     } else {
       // Reset form but keep contratado info if possible
+      const currentProfile = getInitialProfile();
       setFormData(prev => ({
         ...prev,
+        nome_cont: currentProfile.nome_cont || '',
+        cpf_cont: currentProfile.cpf_cont || '',
+        end_cont: currentProfile.end_cont || '',
+        cidade_cont: currentProfile.cidade_cont || 'Telêmaco Borba / PR',
+        tel_cont: currentProfile.tel_cont || '',
+        email_cont: currentProfile.email_cont || '',
         nome1: '', cpf1: '', nome2: '', cpf2: '', end_noivo: '', tel_noivo: '', email_noivo: '',
         data: '', hora: '', convidados: '', local_cer: '', local_fes: '',
         pacote: 'mc', srv_detail: '', imagem: 'autoriza', hora_extra: '',
@@ -95,7 +115,8 @@ export default function Contrato() {
         p1_valor: '', p1_data: '', p1_forma: 'PIX',
         p2_valor: '', p2_data: '', p2_forma: 'PIX',
         p3_valor: '', p3_data: '', p3_forma: 'PIX',
-        banco: '', remarcacao: '', foro: 'Telêmaco Borba'
+        banco: '', remarcacao: '', foro: 'Telêmaco Borba',
+        fornecedores: []
       }));
     }
   }, [selectedCoupleId]);
@@ -162,6 +183,29 @@ export default function Contrato() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const addFornecedor = () => {
+    setFormData(prev => ({
+      ...prev,
+      fornecedores: [...(prev.fornecedores || []), { empresa: '', email: '', whatsapp: '' }]
+    }));
+  };
+
+  const removeFornecedor = (index: number) => {
+    setFormData(prev => {
+      const newF = [...(prev.fornecedores || [])];
+      newF.splice(index, 1);
+      return { ...prev, fornecedores: newF };
+    });
+  };
+
+  const handleFornecedorChange = (index: number, field: 'empresa' | 'email' | 'whatsapp', value: string) => {
+    setFormData(prev => {
+      const newF = [...(prev.fornecedores || [])];
+      newF[index] = { ...newF[index], [field]: value };
+      return { ...prev, fornecedores: newF };
+    });
+  };
+
   const fmtDate = (d: string) => {
     if (!d) return '___/___/______';
     try {
@@ -169,6 +213,21 @@ export default function Contrato() {
     } catch {
       return '___/___/______';
     }
+  };
+
+  const exportToPDF = () => {
+    const element = document.getElementById('contract-preview-content');
+    if (!element) return;
+    
+    const opt = {
+      margin:       15,
+      filename:     `contrato_${formData.nome1 || 'noivo1'}_${formData.nome2 || 'noivo2'}.pdf`,
+      image:        { type: 'jpeg' as const, quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+    };
+    
+    html2pdf().set(opt).from(element).save();
   };
 
   if (loading) {
@@ -194,6 +253,12 @@ export default function Contrato() {
             ))}
           </select>
           <button
+            onClick={exportToPDF}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider text-rose-dark bg-blush hover:bg-blush-mid rounded-lg transition-all"
+          >
+            <Download className="w-4 h-4" /> PDF
+          </button>
+          <button
             onClick={handleSave}
             disabled={!selectedCoupleId || saving}
             className="flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider text-white bg-rose hover:bg-rose-dark rounded-lg transition-all disabled:opacity-50"
@@ -208,6 +273,7 @@ export default function Contrato() {
           { id: 'dados', label: 'Partes' },
           { id: 'servicos', label: 'Serviços' },
           { id: 'pagamento', label: 'Pagamento' },
+          { id: 'fornecedores', label: 'Fornecedores' },
           { id: 'preview', label: 'Visualizar' }
         ].map(tab => (
           <button
@@ -409,33 +475,35 @@ export default function Contrato() {
             </div>
           </div>
 
-          <div className="space-y-3 mb-6">
-            <div className="grid grid-cols-3 gap-4 px-2 text-[10px] font-bold text-stone uppercase tracking-widest">
-              <div>Valor</div>
-              <div>Vencimento</div>
-              <div>Forma</div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4">
-              <input type="text" name="p1_valor" value={formData.p1_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="1ª parcela — sinal" />
-              <input type="date" name="p1_data" value={formData.p1_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
-              <select name="p1_forma" value={formData.p1_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
-                <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <input type="text" name="p2_valor" value={formData.p2_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="2ª parcela (opcional)" />
-              <input type="date" name="p2_data" value={formData.p2_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
-              <select name="p2_forma" value={formData.p2_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
-                <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <input type="text" name="p3_valor" value={formData.p3_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="Saldo final" />
-              <input type="date" name="p3_data" value={formData.p3_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
-              <select name="p3_forma" value={formData.p3_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
-                <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
-              </select>
+          <div className="space-y-3 mb-6 overflow-x-auto">
+            <div className="min-w-[500px]">
+              <div className="grid grid-cols-3 gap-4 px-2 text-[10px] font-bold text-stone uppercase tracking-widest mb-2">
+                <div>Valor</div>
+                <div>Vencimento</div>
+                <div>Forma</div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 mb-3">
+                <input type="text" name="p1_valor" value={formData.p1_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="1ª parcela — sinal" />
+                <input type="date" name="p1_data" value={formData.p1_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
+                <select name="p1_forma" value={formData.p1_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
+                  <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-4 mb-3">
+                <input type="text" name="p2_valor" value={formData.p2_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="2ª parcela (opcional)" />
+                <input type="date" name="p2_data" value={formData.p2_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
+                <select name="p2_forma" value={formData.p2_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
+                  <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <input type="text" name="p3_valor" value={formData.p3_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="Saldo final" />
+                <input type="date" name="p3_data" value={formData.p3_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
+                <select name="p3_forma" value={formData.p3_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
+                  <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -461,6 +529,72 @@ export default function Contrato() {
           <button onClick={() => setActiveTab('servicos')} className="flex items-center gap-2 px-6 py-2 text-sm font-bold uppercase tracking-wider text-rose-dark bg-transparent border border-blush-mid rounded-lg hover:bg-blush hover:border-rose transition-all">
             <ChevronLeft className="w-4 h-4" /> Anterior
           </button>
+          <button onClick={() => setActiveTab('fornecedores')} className="flex items-center gap-2 px-6 py-2 text-sm font-bold uppercase tracking-wider text-white bg-rose hover:bg-rose-dark rounded-lg transition-all">
+            Próximo <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* TAB: FORNECEDORES */}
+      <div className={cn("space-y-6", activeTab !== 'fornecedores' && "hidden print:hidden")}>
+        <div className="bg-white border border-divider rounded-xl p-6 shadow-sm">
+          <h3 className="font-display text-lg font-medium text-ink mb-4 pb-3 border-b border-divider">Fornecedores</h3>
+          
+          <div className="space-y-4 overflow-x-auto">
+            <div className="min-w-[800px]">
+              <div className="grid grid-cols-12 gap-4 px-2 pb-2 border-b border-divider text-[10px] font-bold text-stone uppercase tracking-widest">
+                <div className="col-span-4">Nome da Empresa</div>
+                <div className="col-span-4">E-mail de Contato</div>
+                <div className="col-span-3">WhatsApp</div>
+                <div className="col-span-1 text-center">Ações</div>
+              </div>
+              {(formData.fornecedores || []).map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-4 items-center py-2 border-b border-divider/50 last:border-0">
+                  <div className="col-span-4">
+                    <input 
+                      type="text" 
+                      value={item.empresa}
+                      onChange={(e) => handleFornecedorChange(idx, 'empresa', e.target.value)}
+                      placeholder="Nome da empresa"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <input 
+                      type="email" 
+                      value={item.email}
+                      onChange={(e) => handleFornecedorChange(idx, 'email', e.target.value)}
+                      placeholder="E-mail de contato"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input 
+                      type="text" 
+                      value={item.whatsapp || ''}
+                      onChange={(e) => handleFornecedorChange(idx, 'whatsapp', e.target.value)}
+                      placeholder="WhatsApp"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-1 flex justify-center gap-1">
+                    <button onClick={() => removeFornecedor(idx)} className="p-1 text-stone hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center print:hidden">
+            <button onClick={addFornecedor} className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-dark bg-blush hover:bg-blush-mid rounded-lg transition-all">
+              <Plus className="w-4 h-4" /> Adicionar Fornecedor
+            </button>
+          </div>
+        </div>
+
+        <div className="flex justify-between">
+          <button onClick={() => setActiveTab('pagamento')} className="flex items-center gap-2 px-6 py-2 text-sm font-bold uppercase tracking-wider text-rose-dark bg-transparent border border-blush-mid rounded-lg hover:bg-blush hover:border-rose transition-all">
+            <ChevronLeft className="w-4 h-4" /> Anterior
+          </button>
           <button onClick={() => setActiveTab('preview')} className="flex items-center gap-2 px-6 py-2 text-sm font-bold uppercase tracking-wider text-white bg-rose hover:bg-rose-dark rounded-lg transition-all">
             Visualizar <ChevronRight className="w-4 h-4" />
           </button>
@@ -469,7 +603,7 @@ export default function Contrato() {
 
       {/* TAB: PREVIEW */}
       <div className={cn("space-y-6", activeTab !== 'preview' && "hidden print:block")}>
-        <div className="bg-white border border-divider rounded-xl p-12 shadow-sm max-w-4xl mx-auto text-sm leading-relaxed text-ink print:shadow-none print:border-none print:p-0">
+        <div id="contract-preview-content" className="bg-white border border-divider rounded-xl p-12 shadow-sm max-w-4xl mx-auto text-sm leading-relaxed text-ink print:shadow-none print:border-none print:p-0">
           <h1 className="font-display text-2xl font-medium text-center mb-1">Contrato de Prestação de Serviços</h1>
           <div className="text-center text-xs font-bold tracking-widest uppercase text-stone mb-1">Cerimonial e / ou Mestre de Cerimônias de Casamento</div>
           <div className="text-center italic text-xs text-stone mb-8">Instrumento particular com força de obrigação</div>

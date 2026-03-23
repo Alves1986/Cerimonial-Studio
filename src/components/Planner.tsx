@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Couple } from '../types/database';
-import { Loader2, Printer, Save } from 'lucide-react';
+import { Loader2, Printer, Save, ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function Planner() {
@@ -19,12 +19,14 @@ export default function Planner() {
     style: '',
     observations: '',
   });
-  const [rituals, setRituals] = useState<Record<string, boolean>>({});
+  const DEFAULT_RITUALS = ['Cerimônia das velas', 'Cerimônia da areia', 'Laço dos noivos', 'Flores para as mães', 'Pombas ou borboletas'];
+  const [ritualsList, setRitualsList] = useState<Array<{ name: string, checked: boolean }>>(
+    DEFAULT_RITUALS.map(r => ({ name: r, checked: false }))
+  );
   const [timeline, setTimeline] = useState<Array<{ time: string, activity: string, responsible: string }>>([]);
   const [procession, setProcession] = useState<Array<{ order: number, label: string, names: string, music: string }>>([]);
   const [suppliers, setSuppliers] = useState<Array<{ category: string, name: string, phone: string }>>([]);
 
-  const RITUAL_OPTIONS = ['Cerimônia das velas', 'Cerimônia da areia', 'Laço dos noivos', 'Flores para as mães', 'Pombas ou borboletas'];
   const PROCESSION_LABELS = ['Noivo com sua mãe', 'Mãe da noiva com pai do noivo', 'Padrinho 1 + Madrinha 1', 'Padrinho 2 + Madrinha 2', 'Padrinho 3 + Madrinha 3', 'Padrinho 4 + Madrinha 4', 'Padrinho 5 + Madrinha 5', 'Padrinho 6 + Madrinha 6', 'Pajem / Daminha 1', 'Pajem / Daminha 2', 'Noiva com: _______________'];
   const SUPPLIER_CATS = ['Espaço / Buffet', 'DJ', 'Banda ao Vivo', 'Decoradora', 'Fotógrafo', 'Videomaker', 'Cabeleireiro', 'Maquiadora', 'Florista', 'Confeitaria', 'Padre / Pastor / Celebrante', 'Juiz de Paz', 'Transporte'];
 
@@ -48,7 +50,7 @@ export default function Planner() {
       style: '',
       observations: '',
     });
-    setRituals({});
+    setRitualsList(DEFAULT_RITUALS.map(r => ({ name: r, checked: false })));
     setTimeline([]);
     setProcession(PROCESSION_LABELS.map((label, i) => ({ order: i + 1, label, names: '', music: '' })));
     setSuppliers(SUPPLIER_CATS.map(cat => ({ category: cat, name: '', phone: '' })));
@@ -86,9 +88,15 @@ export default function Planner() {
           observations: d.observations || '',
         });
         
-        const rits: Record<string, boolean> = {};
-        (d.rituals || []).forEach((r: string) => { rits[r] = true; });
-        setRituals(rits);
+        const loadedRituals = d.rituals || [];
+        const combined = [...DEFAULT_RITUALS];
+        loadedRituals.forEach((r: string) => {
+          if (!combined.includes(r)) combined.push(r);
+        });
+        setRitualsList(combined.map(r => ({
+          name: r,
+          checked: loadedRituals.includes(r)
+        })));
 
         if (d.timeline && d.timeline.length > 0) setTimeline(d.timeline);
         if (d.procession && d.procession.length > 0) {
@@ -119,7 +127,7 @@ export default function Planner() {
 
       const details = {
         ...formData,
-        rituals: Object.keys(rituals).filter(k => rituals[k]),
+        rituals: ritualsList.filter(r => r.checked && r.name.trim() !== '').map(r => r.name.trim()),
         timeline,
         procession,
         suppliers
@@ -142,6 +150,37 @@ export default function Planner() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const addProcessionItem = () => {
+    setProcession([...procession, { order: procession.length + 1, label: '', names: '', music: '' }]);
+  };
+
+  const removeProcessionItem = (index: number) => {
+    const newP = [...procession];
+    newP.splice(index, 1);
+    newP.forEach((item, i) => item.order = i + 1);
+    setProcession(newP);
+  };
+
+  const moveProcessionItem = (index: number, direction: number) => {
+    if (index + direction < 0 || index + direction >= procession.length) return;
+    const newP = [...procession];
+    const temp = newP[index];
+    newP[index] = newP[index + direction];
+    newP[index + direction] = temp;
+    newP.forEach((item, i) => item.order = i + 1);
+    setProcession(newP);
+  };
+
+  const addSupplier = () => {
+    setSuppliers([...suppliers, { category: '', name: '', phone: '' }]);
+  };
+
+  const removeSupplier = (index: number) => {
+    const newS = [...suppliers];
+    newS.splice(index, 1);
+    setSuppliers(newS);
   };
 
   const generateTimeline = () => {
@@ -296,18 +335,44 @@ export default function Planner() {
 
           <div className="mt-6 pt-6 border-t border-divider">
             <label className="text-[10px] font-bold text-stone uppercase tracking-widest block mb-3">Rituais especiais</label>
-            <div className="flex flex-wrap gap-4">
-              {RITUAL_OPTIONS.map(ritual => (
-                <label key={ritual} className="flex items-center gap-2 text-sm cursor-pointer">
+            <div className="flex flex-col gap-3">
+              {ritualsList.map((ritual, idx) => (
+                <div key={idx} className="flex items-center gap-3">
                   <input
                     type="checkbox"
-                    checked={rituals[ritual] || false}
-                    onChange={(e) => setRituals({...rituals, [ritual]: e.target.checked})}
+                    checked={ritual.checked}
+                    onChange={(e) => {
+                      const newList = [...ritualsList];
+                      newList[idx].checked = e.target.checked;
+                      setRitualsList(newList);
+                    }}
                     className="w-4 h-4 accent-rose"
                   />
-                  {ritual}
-                </label>
+                  <input
+                    type="text"
+                    value={ritual.name}
+                    onChange={(e) => {
+                      const newList = [...ritualsList];
+                      newList[idx].name = e.target.value;
+                      setRitualsList(newList);
+                    }}
+                    className="flex-1 bg-transparent border-b border-transparent hover:border-divider focus:border-rose text-sm outline-none transition-colors"
+                    placeholder="Nome do ritual"
+                  />
+                  <button onClick={() => {
+                    const newList = [...ritualsList];
+                    newList.splice(idx, 1);
+                    setRitualsList(newList);
+                  }} className="p-1 text-stone hover:text-red-500 transition-colors">
+                    <Trash2 className="w-4 h-4"/>
+                  </button>
+                </div>
               ))}
+              <button onClick={() => {
+                setRitualsList([...ritualsList, { name: '', checked: true }]);
+              }} className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-dark bg-blush hover:bg-blush-mid rounded-lg transition-all w-max mt-2">
+                <Plus className="w-4 h-4" /> Adicionar Ritual
+              </button>
             </div>
           </div>
 
@@ -388,45 +453,70 @@ export default function Planner() {
             O altar deve estar à frente. Lado esquerdo reservado para convidados da noiva; lado direito, noivo.
           </div>
           
-          <div className="space-y-2">
-            <div className="grid grid-cols-12 gap-4 px-2 pb-2 border-b border-divider text-[10px] font-bold text-stone uppercase tracking-widest">
-              <div className="col-span-1 text-center">#</div>
-              <div className="col-span-4">Posição</div>
-              <div className="col-span-4">Nomes</div>
-              <div className="col-span-3">Música</div>
-            </div>
-            {procession.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-4 items-center py-2 border-b border-divider/50 last:border-0">
-                <div className="col-span-1 text-center text-xs font-bold text-stone">{item.order}</div>
-                <div className="col-span-4 text-sm text-ink-light">{item.label}</div>
-                <div className="col-span-4">
-                  <input 
-                    type="text" 
-                    value={item.names}
-                    onChange={(e) => {
-                      const newP = [...procession];
-                      newP[idx].names = e.target.value;
-                      setProcession(newP);
-                    }}
-                    placeholder="Nomes"
-                    className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
-                  />
-                </div>
-                <div className="col-span-3">
-                  <input 
-                    type="text" 
-                    value={item.music}
-                    onChange={(e) => {
-                      const newP = [...procession];
-                      newP[idx].music = e.target.value;
-                      setProcession(newP);
-                    }}
-                    placeholder="Música"
-                    className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
-                  />
-                </div>
+          <div className="overflow-x-auto">
+            <div className="space-y-2 min-w-[800px]">
+              <div className="grid grid-cols-12 gap-4 px-2 pb-2 border-b border-divider text-[10px] font-bold text-stone uppercase tracking-widest">
+                <div className="col-span-1 text-center">#</div>
+                <div className="col-span-3">Posição</div>
+                <div className="col-span-3">Nomes</div>
+                <div className="col-span-3">Música</div>
+                <div className="col-span-2 text-center">Ações</div>
               </div>
-            ))}
+              {procession.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-4 items-center py-2 border-b border-divider/50 last:border-0">
+                  <div className="col-span-1 text-center text-xs font-bold text-stone">{item.order}</div>
+                  <div className="col-span-3">
+                    <input 
+                      type="text" 
+                      value={item.label}
+                      onChange={(e) => {
+                        const newP = [...procession];
+                        newP[idx].label = e.target.value;
+                        setProcession(newP);
+                      }}
+                      placeholder="Ex: Padrinhos"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input 
+                      type="text" 
+                      value={item.names}
+                      onChange={(e) => {
+                        const newP = [...procession];
+                        newP[idx].names = e.target.value;
+                        setProcession(newP);
+                      }}
+                      placeholder="Nomes"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input 
+                      type="text" 
+                      value={item.music}
+                      onChange={(e) => {
+                        const newP = [...procession];
+                        newP[idx].music = e.target.value;
+                        setProcession(newP);
+                      }}
+                      placeholder="Música"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-2 flex justify-center gap-1">
+                    <button onClick={() => moveProcessionItem(idx, -1)} disabled={idx === 0} className="p-1 text-stone hover:text-ink disabled:opacity-30 transition-colors"><ArrowUp className="w-4 h-4"/></button>
+                    <button onClick={() => moveProcessionItem(idx, 1)} disabled={idx === procession.length - 1} className="p-1 text-stone hover:text-ink disabled:opacity-30 transition-colors"><ArrowDown className="w-4 h-4"/></button>
+                    <button onClick={() => removeProcessionItem(idx)} className="p-1 text-stone hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center print:hidden">
+            <button onClick={addProcessionItem} className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-dark bg-blush hover:bg-blush-mid rounded-lg transition-all">
+              <Plus className="w-4 h-4" /> Adicionar Item
+            </button>
           </div>
         </div>
       </div>
@@ -435,43 +525,66 @@ export default function Planner() {
         <div className="bg-white border border-divider rounded-xl p-6 shadow-sm">
           <h3 className="font-display text-lg font-medium text-ink mb-6 pb-3 border-b border-divider">Contatos dos fornecedores</h3>
           
-          <div className="space-y-2">
-            <div className="grid grid-cols-12 gap-4 px-2 pb-2 border-b border-divider text-[10px] font-bold text-stone uppercase tracking-widest">
-              <div className="col-span-4">Categoria</div>
-              <div className="col-span-5">Nome / Empresa</div>
-              <div className="col-span-3">Telefone</div>
-            </div>
-            {suppliers.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-4 items-center py-2 border-b border-divider/50 last:border-0">
-                <div className="col-span-4 text-sm font-bold text-stone">{item.category}</div>
-                <div className="col-span-5">
-                  <input 
-                    type="text" 
-                    value={item.name}
-                    onChange={(e) => {
-                      const newS = [...suppliers];
-                      newS[idx].name = e.target.value;
-                      setSuppliers(newS);
-                    }}
-                    placeholder="Nome"
-                    className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
-                  />
-                </div>
-                <div className="col-span-3">
-                  <input 
-                    type="text" 
-                    value={item.phone}
-                    onChange={(e) => {
-                      const newS = [...suppliers];
-                      newS[idx].phone = e.target.value;
-                      setSuppliers(newS);
-                    }}
-                    placeholder="Telefone"
-                    className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
-                  />
-                </div>
+          <div className="overflow-x-auto">
+            <div className="space-y-2 min-w-[800px]">
+              <div className="grid grid-cols-12 gap-4 px-2 pb-2 border-b border-divider text-[10px] font-bold text-stone uppercase tracking-widest">
+                <div className="col-span-4">Categoria</div>
+                <div className="col-span-4">Nome / Empresa</div>
+                <div className="col-span-3">Telefone</div>
+                <div className="col-span-1 text-center">Ações</div>
               </div>
-            ))}
+              {suppliers.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-4 items-center py-2 border-b border-divider/50 last:border-0">
+                  <div className="col-span-4">
+                    <input 
+                      type="text" 
+                      value={item.category}
+                      onChange={(e) => {
+                        const newS = [...suppliers];
+                        newS[idx].category = e.target.value;
+                        setSuppliers(newS);
+                      }}
+                      placeholder="Ex: Cerimonialista"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors font-bold text-stone"
+                    />
+                  </div>
+                  <div className="col-span-4">
+                    <input 
+                      type="text" 
+                      value={item.name}
+                      onChange={(e) => {
+                        const newS = [...suppliers];
+                        newS[idx].name = e.target.value;
+                        setSuppliers(newS);
+                      }}
+                      placeholder="Nome"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <input 
+                      type="text" 
+                      value={item.phone}
+                      onChange={(e) => {
+                        const newS = [...suppliers];
+                        newS[idx].phone = e.target.value;
+                        setSuppliers(newS);
+                      }}
+                      placeholder="Telefone"
+                      className="w-full bg-ivory border border-divider rounded px-3 py-1.5 text-sm outline-none focus:border-rose transition-colors"
+                    />
+                  </div>
+                  <div className="col-span-1 flex justify-center gap-1">
+                    <button onClick={() => removeSupplier(idx)} className="p-1 text-stone hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center print:hidden">
+            <button onClick={addSupplier} className="flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-wider text-rose-dark bg-blush hover:bg-blush-mid rounded-lg transition-all">
+              <Plus className="w-4 h-4" /> Adicionar Fornecedor
+            </button>
           </div>
         </div>
       </div>

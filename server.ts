@@ -1,0 +1,143 @@
+import express from 'express';
+import { createServer as createViteServer } from 'vite';
+import Stripe from 'stripe';
+import { upsertProductRecord, upsertPriceRecord, upsertSubscription, createOrRetrieveCustomer } from './src/lib/stripe-helpers.js';
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2025-02-24.acacia' as any,
+});
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  // Webhook endpoint must use raw body parser
+  app.post('/api/webhooks', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!sig || !webhookSecret) {
+      return res.status(400).send('Webhook secret or signature missing');
+    }
+
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    } catch (err: any) {
+      console.error(`Webhook Error: ${err.message}`);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      switch (event.type) {
+        case 'product.created':
+        case 'product.updated':
+          await upsertProductRecord(event.data.object as Stripe.Product);
+          break;
+        case 'price.created':
+        case 'price.updated':
+          await upsertPriceRecord(event.data.object as Stripe.Price);
+          break;
+        case 'customer.subscription.created':
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+          const subscription = event.data.object as Stripe.Subscription;
+          await upsertSubscription(
+            subscription,
+            subscription.customer as string,
+            event.type === 'customer.subscription.created'
+          );
+          break;
+        case 'checkout.session.completed':
+          const checkoutSession = event.data.object as Stripe.Checkout.Session;
+          if (checkoutSession.mode === 'subscription') {
+            const subscriptionId = checkoutSession.subscription;
+            await upsertSubscription(
+              await stripe.subscriptions.retrieve(subscriptionId as string),
+              checkoutSession.customer as string,
+              true
+            );
+          }
+          break;
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+    } catch (error) {
+      console.error('Error processing webhook:', error);
+      return res.status(500).send('Webhook handler failed');
+    }
+
+    res.json({ received: true });
+  });
+
+  // Regular JSON parser for other endpoints
+  app.use(express.json());
+
+  app.post('/api/create-checkout', async (req, res) => {
+    try {
+      const { priceId, userId, email } = req.body;
+      
+      if (!priceId || !userId) {
+        return res.status(400).json({ error: 'Missing priceId or userId' });
+      }
+
+      const customerId = await createOrRetrieveCustomer({
+        uuid: userId,
+        email: email || ''
+      });
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        billing_address_collection: 'required',
+        customer: customerId,
+        client_reference_id: userId,
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1
+          }
+        ],
+        mode: 'subscription',
+        allow_promotion_codes: true,
+        subscription_data: {
+          metadata: {
+            supabase_user_id: userId
+          }
+        },
+        success_url: `${req.protocol}://${req.get('host')}/dashboard`,
+        cancel_url: `${req.protocol}://${req.get('host')}/pricing`
+      });
+
+      res.json({ sessionId: session.id, url: session.url });
+    } catch (error: any) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

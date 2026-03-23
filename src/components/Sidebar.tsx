@@ -1,14 +1,16 @@
 import React from 'react';
-import { Heart, LayoutDashboard, Users, ClipboardList, CheckSquare, FileText, MessageSquare, AlertTriangle, LogOut } from 'lucide-react';
+import { Heart, LayoutDashboard, Users, ClipboardList, CheckSquare, FileText, MessageSquare, AlertTriangle, LogOut, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   activePage: string;
   setActivePage: (page: string) => void;
+  isOpen?: boolean;
+  setIsOpen?: (isOpen: boolean) => void;
 }
 
-export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
+export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen }: SidebarProps) {
   const navItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard, group: 'Principal' },
     { id: 'casais', label: 'Meus Casais', icon: Users, group: 'Principal' },
@@ -17,6 +19,7 @@ export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
     { id: 'contrato', label: 'Gerar Contrato', icon: FileText, group: 'Ferramentas' },
     { id: 'roteiros', label: 'Roteiros de Fala', icon: MessageSquare, group: 'Referência' },
     { id: 'emergencias', label: 'Guia de Imprevistos', icon: AlertTriangle, group: 'Referência' },
+    { id: 'perfil', label: 'Perfil', icon: User, group: 'Configurações' },
   ];
 
   const groups = Array.from(new Set(navItems.map(item => item.group)));
@@ -26,8 +29,11 @@ export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white border-right border-divider flex flex-col z-50">
-      <div className="p-8 border-b border-divider">
+    <aside className={cn(
+      "fixed left-0 top-0 bottom-0 w-64 bg-white border-r border-divider flex flex-col z-50 transition-transform duration-300 ease-in-out",
+      isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+    )}>
+      <div className="p-8 border-b border-divider hidden md:block">
         <div className="w-10 h-10 bg-blush rounded-full flex items-center justify-center mb-4">
           <span className="font-display italic text-rose-dark text-lg">C</span>
         </div>
@@ -44,7 +50,10 @@ export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
             {navItems.filter(item => item.group === group).map(item => (
               <button
                 key={item.id}
-                onClick={() => setActivePage(item.id)}
+                onClick={() => {
+                  setActivePage(item.id);
+                  if (setIsOpen) setIsOpen(false);
+                }}
                 className={cn(
                   "w-full flex items-center gap-3 px-8 py-3 text-sm transition-all border-l-2",
                   activePage === item.id
