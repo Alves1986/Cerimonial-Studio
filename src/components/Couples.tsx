@@ -13,8 +13,8 @@ export default function Couples({ userPlan }: { userPlan: string }) {
   const [editingCouple, setEditingCouple] = useState<Couple | null>(null);
 
   const getLimit = () => {
-    if (userPlan === 'Plano Pro') return Infinity;
-    if (userPlan === 'Plano Básico') return 10;
+    if (userPlan?.includes('Pro')) return Infinity;
+    if (userPlan?.includes('Básico') || userPlan?.includes('Basico')) return 10;
     return 3;
   };
 

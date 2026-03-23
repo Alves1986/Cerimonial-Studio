@@ -86,10 +86,27 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing priceId or userId' });
       }
 
+      if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error('STRIPE_SECRET_KEY is not configured in environment variables.');
+      }
+
+      // Check for mock IDs from the SQL script
+      if (priceId.includes('monthly') && !priceId.startsWith('price_1')) {
+        console.warn(`Attempting to use a potentially mock priceId: ${priceId}`);
+      }
+
       const customerId = await createOrRetrieveCustomer({
         uuid: userId,
         email: email || ''
       });
+
+      const getBaseUrl = () => {
+        if (process.env.APP_URL) return process.env.APP_URL;
+        const protocol = req.get('host')?.includes('localhost') ? 'http' : 'https';
+        return `${protocol}://${req.get('host')}`;
+      };
+
+      const baseUrl = getBaseUrl();
 
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -109,14 +126,27 @@ async function startServer() {
             supabase_user_id: userId
           }
         },
-        success_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/dashboard`,
-        cancel_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/pricing`
+        success_url: `${baseUrl}/dashboard`,
+        cancel_url: `${baseUrl}/pricing`
       });
+
+      if (!session.url) {
+        throw new Error('Failed to generate Stripe checkout URL.');
+      }
 
       res.json({ sessionId: session.id, url: session.url });
     } catch (error: any) {
       console.error('Error creating checkout session:', error);
-      res.status(500).json({ error: error.message });
+      
+      // Provide more helpful messages for common Stripe errors
+      let message = error.message;
+      if (message.includes('No such price')) {
+        message = `O ID do preço (${req.body.priceId}) não foi encontrado no Stripe. Certifique-se de que você criou o produto e o preço no seu Dashboard do Stripe e atualizou o banco de dados com o ID real (que começa com 'price_').`;
+      } else if (message.includes('apiKey')) {
+        message = 'A chave secreta do Stripe (STRIPE_SECRET_KEY) é inválida ou não foi configurada.';
+      }
+      
+      res.status(500).json({ error: message });
     }
   });
 

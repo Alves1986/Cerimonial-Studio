@@ -144,7 +144,7 @@ export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, on
     );
   }
 
-  if (userPlan !== 'Plano Pro') {
+  if (!userPlan?.includes('Pro')) {
     return (
       <div className="flex flex-col items-center justify-center py-20 bg-white border border-divider rounded-2xl shadow-sm animate-page-in">
         <div className="w-20 h-20 bg-blush rounded-full flex items-center justify-center mb-6">

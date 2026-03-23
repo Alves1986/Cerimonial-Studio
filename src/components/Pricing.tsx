@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Check, Loader2, Sparkles, ShieldCheck, Zap } from 'lucide-react';
+import { Check, Loader2, ShieldCheck } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface Price {
@@ -8,6 +8,7 @@ interface Price {
   unit_amount: number;
   currency: string;
   interval: string;
+  interval_count: number;
   product: {
     id: string;
     name: string;
@@ -90,6 +91,32 @@ export default function Pricing() {
     );
   }
 
+  // Agrupar preços por produto (normalizando nomes caso o usuário tenha criado produtos separados no Stripe)
+  const productsMap = new Map<string, { product: any, prices: Price[] }>();
+  
+  prices.forEach(p => {
+    // Se o nome contém "Pro", agrupamos tudo sob "Plano Pro"
+    const normalizedName = p.product.name.includes('Pro') 
+      ? 'Plano Pro' 
+      : p.product.name.includes('Básico') || p.product.name.includes('Basico') 
+        ? 'Plano Básico' 
+        : p.product.name;
+    
+    if (!productsMap.has(normalizedName)) {
+      productsMap.set(normalizedName, { 
+        product: { ...p.product, name: normalizedName }, 
+        prices: [] 
+      });
+    }
+    productsMap.get(normalizedName)!.prices.push(p);
+  });
+
+  // Ordenar: Básico primeiro, Pro depois
+  const groupedProducts = Array.from(productsMap.values()).sort((a, b) => {
+    if (a.product.name.includes('Pro')) return 1;
+    return -1;
+  });
+
   return (
     <div className="animate-page-in max-w-5xl mx-auto py-8">
       <div className="text-center mb-12">
@@ -99,11 +126,11 @@ export default function Pricing() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 justify-center">
         {/* Free Plan (Implicit) */}
         <PlanCard
           name="Gratuito"
-          price="R$ 0"
+          prices={[{ id: 'free', unit_amount: 0, interval: 'month', interval_count: 1 } as any]}
           description="Para quem está começando"
           features={[
             'Até 3 casais',
@@ -117,18 +144,17 @@ export default function Pricing() {
           buttonLabel="Plano Atual"
         />
 
-        {prices.map((price) => (
+        {groupedProducts.map(({ product, prices }) => (
           <PlanCard
-            key={price.id}
-            name={price.product.name}
-            price={`R$ ${(price.unit_amount / 100).toFixed(2)}`}
-            interval={price.interval === 'month' ? '/mês' : ''}
-            description={price.product.description}
-            features={getFeaturesForProduct(price.product.id)}
-            isCurrent={currentPlan === price.product.name}
-            onAction={() => handleCheckout(price.id)}
-            loading={processingId === price.id}
-            highlight={price.product.id === 'prod_pro'}
+            key={product.name}
+            name={product.name}
+            prices={prices}
+            description={product.description || 'Acesso completo às ferramentas'}
+            features={getFeaturesForProduct(product.name)}
+            isCurrent={currentPlan?.includes(product.name.replace('Plano ', ''))}
+            onAction={handleCheckout}
+            loadingId={processingId}
+            highlight={product.name.includes('Pro')}
           />
         ))}
       </div>
@@ -152,17 +178,33 @@ export default function Pricing() {
 
 function PlanCard({ 
   name, 
-  price, 
-  interval = '', 
+  prices, 
   description, 
   features, 
   isCurrent, 
   onAction, 
-  loading, 
+  loadingId, 
   highlight,
   disabled,
   buttonLabel
 }: any) {
+  const [selectedPrice, setSelectedPrice] = useState(prices[0]);
+  const isLoading = loadingId === selectedPrice?.id;
+
+  const getIntervalText = (interval: string, count: number) => {
+    if (interval === 'month' && count === 6) return 'semestre';
+    if (interval === 'month') return count > 1 ? `${count} meses` : 'mês';
+    if (interval === 'year') return count > 1 ? `${count} anos` : 'ano';
+    return interval;
+  };
+
+  const getIntervalLabel = (interval: string, count: number) => {
+    if (interval === 'month' && count === 6) return 'Semestral';
+    if (interval === 'month') return count > 1 ? `A cada ${count} meses` : 'Mensal';
+    if (interval === 'year') return count > 1 ? `A cada ${count} anos` : 'Anual';
+    return 'Mensal';
+  };
+
   return (
     <div className={cn(
       "relative flex flex-col p-8 rounded-2xl border transition-all duration-300",
@@ -177,14 +219,37 @@ function PlanCard({
         </div>
       )}
       
-      <div className="mb-8">
+      <div className="mb-6">
         <h3 className="font-display text-2xl font-medium text-ink mb-2">{name}</h3>
         <p className="text-stone text-xs font-light h-8">{description}</p>
       </div>
 
+      {prices.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {prices.map((p: any) => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedPrice(p)}
+              className={cn(
+                "px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full border transition-all",
+                selectedPrice.id === p.id 
+                  ? "bg-rose text-white border-rose" 
+                  : "bg-ivory text-stone border-divider hover:border-rose/50"
+              )}
+            >
+              {getIntervalLabel(p.interval, p.interval_count)}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="mb-8">
-        <span className="text-4xl font-display text-ink">{price}</span>
-        <span className="text-stone text-sm font-light">{interval}</span>
+        <span className="text-4xl font-display text-ink">
+          R$ {(selectedPrice.unit_amount / 100).toFixed(2)}
+        </span>
+        <span className="text-stone text-sm font-light">
+          /{getIntervalText(selectedPrice.interval, selectedPrice.interval_count)}
+        </span>
       </div>
 
       <ul className="space-y-4 mb-8 flex-1">
@@ -197,43 +262,39 @@ function PlanCard({
       </ul>
 
       <button
-        onClick={onAction}
-        disabled={disabled || isCurrent || loading}
+        onClick={() => onAction(selectedPrice.id)}
+        disabled={disabled || isCurrent || isLoading}
         className={cn(
           "w-full py-3 rounded-lg text-sm font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2",
           highlight
             ? "bg-rose text-white hover:bg-rose-dark shadow-lg shadow-rose/20"
             : "bg-ivory text-ink border border-divider hover:bg-blush hover:border-blush-mid",
-          (disabled || isCurrent || loading) && "opacity-50 cursor-not-allowed"
+          (disabled || isCurrent || isLoading) && "opacity-50 cursor-not-allowed"
         )}
       >
-        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
         {isCurrent ? 'Plano Ativo' : (buttonLabel || 'Assinar Agora')}
       </button>
     </div>
   );
 }
 
-function getFeaturesForProduct(productId: string) {
-  switch (productId) {
-    case 'prod_basico':
-      return [
-        'Até 10 casais ativos',
-        'Planner completo',
-        'Checklist ilimitado',
-        'Gestão de fornecedores',
-        'Suporte prioritário'
-      ];
-    case 'prod_pro':
-      return [
-        'Casais ilimitados',
-        'Gerador de Contratos',
-        'Roteiros de Fala editáveis',
-        'Gestão de Cortejo',
-        'Guia de Imprevistos',
-        'Personalização de marca'
-      ];
-    default:
-      return [];
+function getFeaturesForProduct(productName: string) {
+  if (productName.includes('Pro')) {
+    return [
+      'Casais ilimitados',
+      'Gerador de Contratos',
+      'Roteiros de Fala editáveis',
+      'Gestão de Cortejo',
+      'Guia de Imprevistos',
+      'Personalização de marca'
+    ];
   }
+  return [
+    'Até 10 casais ativos',
+    'Planner completo',
+    'Checklist ilimitado',
+    'Gestão de fornecedores',
+    'Suporte prioritário'
+  ];
 }
