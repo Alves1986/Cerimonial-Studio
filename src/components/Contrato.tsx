@@ -23,17 +23,14 @@ export default function Contrato() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('dados');
 
-  const initialProfile = getInitialProfile();
-
-  // Form state
   const [formData, setFormData] = useState({
     // Contratado
-    nome_cont: initialProfile.nome_cont || '',
-    cpf_cont: initialProfile.cpf_cont || '',
-    end_cont: initialProfile.end_cont || '',
-    cidade_cont: initialProfile.cidade_cont || 'Telêmaco Borba / PR',
-    tel_cont: initialProfile.tel_cont || '',
-    email_cont: initialProfile.email_cont || '',
+    nome_cont: '',
+    cpf_cont: '',
+    end_cont: '',
+    cidade_cont: 'Telêmaco Borba / PR',
+    tel_cont: '',
+    email_cont: '',
     
     // Contratantes
     nome1: '',
@@ -60,9 +57,9 @@ export default function Contrato() {
     // Pagamento
     valor_total: '',
     valor_extenso: '',
-    p1_valor: '', p1_data: '', p1_forma: 'PIX',
-    p2_valor: '', p2_data: '', p2_forma: 'PIX',
-    p3_valor: '', p3_data: '', p3_forma: 'PIX',
+    p1_valor: '', p1_data: '', p1_forma: 'PIX', p1_status: 'Pendente',
+    p2_valor: '', p2_data: '', p2_forma: 'PIX', p2_status: 'Pendente',
+    p3_valor: '', p3_data: '', p3_forma: 'PIX', p3_status: 'Pendente',
     banco: '',
     remarcacao: '',
     foro: 'Telêmaco Borba',
@@ -78,6 +75,7 @@ export default function Contrato() {
 
   useEffect(() => {
     fetchCouples();
+    fetchCerimonialistaProfile();
   }, []);
 
   useEffect(() => {
@@ -98,28 +96,58 @@ export default function Contrato() {
       }
       fetchContractData(selectedCoupleId);
     } else {
-      // Reset form but keep contratado info if possible
-      const currentProfile = getInitialProfile();
+      // Reset form but keep contratado info
       setFormData(prev => ({
         ...prev,
-        nome_cont: currentProfile.nome_cont || '',
-        cpf_cont: currentProfile.cpf_cont || '',
-        end_cont: currentProfile.end_cont || '',
-        cidade_cont: currentProfile.cidade_cont || 'Telêmaco Borba / PR',
-        tel_cont: currentProfile.tel_cont || '',
-        email_cont: currentProfile.email_cont || '',
         nome1: '', cpf1: '', nome2: '', cpf2: '', end_noivo: '', tel_noivo: '', email_noivo: '',
         data: '', hora: '', convidados: '', local_cer: '', local_fes: '',
         pacote: 'mc', srv_detail: '', imagem: 'autoriza', hora_extra: '',
         valor_total: '', valor_extenso: '',
-        p1_valor: '', p1_data: '', p1_forma: 'PIX',
-        p2_valor: '', p2_data: '', p2_forma: 'PIX',
-        p3_valor: '', p3_data: '', p3_forma: 'PIX',
+        p1_valor: '', p1_data: '', p1_forma: 'PIX', p1_status: 'Pendente',
+        p2_valor: '', p2_data: '', p2_forma: 'PIX', p2_status: 'Pendente',
+        p3_valor: '', p3_data: '', p3_forma: 'PIX', p3_status: 'Pendente',
         banco: '', remarcacao: '', foro: 'Telêmaco Borba',
         fornecedores: []
       }));
     }
   }, [selectedCoupleId]);
+
+  const fetchCerimonialistaProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('cerimonialista_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setFormData(prev => ({
+          ...prev,
+          nome_cont: data.nome_cont || prev.nome_cont,
+          cpf_cont: data.cpf_cont || prev.cpf_cont,
+          end_cont: data.end_cont || prev.end_cont,
+          cidade_cont: data.cidade_cont || prev.cidade_cont,
+          tel_cont: data.tel_cont || prev.tel_cont,
+          email_cont: data.email_cont || prev.email_cont,
+        }));
+      } else {
+        // Fallback to localStorage if Supabase has no data yet
+        const saved = localStorage.getItem('cerimonialista_profile');
+        if (saved) {
+          try {
+            const localData = JSON.parse(saved);
+            setFormData(prev => ({ ...prev, ...localData }));
+          } catch (e) {}
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching cerimonialista profile:', error);
+    }
+  };
 
   const fetchCouples = async () => {
     try {
@@ -476,32 +504,48 @@ export default function Contrato() {
           </div>
 
           <div className="space-y-3 mb-6 overflow-x-auto">
-            <div className="min-w-[500px]">
-              <div className="grid grid-cols-3 gap-4 px-2 text-[10px] font-bold text-stone uppercase tracking-widest mb-2">
+            <div className="min-w-[600px]">
+              <div className="grid grid-cols-4 gap-4 px-2 text-[10px] font-bold text-stone uppercase tracking-widest mb-2">
                 <div>Valor</div>
                 <div>Vencimento</div>
                 <div>Forma</div>
+                <div>Status</div>
               </div>
               
-              <div className="grid grid-cols-3 gap-4 mb-3">
+              <div className="grid grid-cols-4 gap-4 mb-3">
                 <input type="text" name="p1_valor" value={formData.p1_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="1ª parcela — sinal" />
                 <input type="date" name="p1_data" value={formData.p1_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
                 <select name="p1_forma" value={formData.p1_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
                   <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
                 </select>
+                <select name="p1_status" value={formData.p1_status} onChange={handleChange} className={cn("w-full border rounded-lg px-3 py-2 outline-none transition-all text-sm font-medium", formData.p1_status === 'Pago' ? 'bg-green-50 text-green-700 border-green-200' : formData.p1_status === 'Atrasado' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-ivory text-stone border-divider')}>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Pago">Pago</option>
+                  <option value="Atrasado">Atrasado</option>
+                </select>
               </div>
-              <div className="grid grid-cols-3 gap-4 mb-3">
+              <div className="grid grid-cols-4 gap-4 mb-3">
                 <input type="text" name="p2_valor" value={formData.p2_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="2ª parcela (opcional)" />
                 <input type="date" name="p2_data" value={formData.p2_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
                 <select name="p2_forma" value={formData.p2_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
                   <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
                 </select>
+                <select name="p2_status" value={formData.p2_status} onChange={handleChange} className={cn("w-full border rounded-lg px-3 py-2 outline-none transition-all text-sm font-medium", formData.p2_status === 'Pago' ? 'bg-green-50 text-green-700 border-green-200' : formData.p2_status === 'Atrasado' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-ivory text-stone border-divider')}>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Pago">Pago</option>
+                  <option value="Atrasado">Atrasado</option>
+                </select>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <input type="text" name="p3_valor" value={formData.p3_valor} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" placeholder="Saldo final" />
                 <input type="date" name="p3_data" value={formData.p3_data} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm" />
                 <select name="p3_forma" value={formData.p3_forma} onChange={handleChange} className="w-full bg-ivory border border-divider rounded-lg px-3 py-2 outline-none focus:border-rose transition-all text-sm">
                   <option>PIX</option><option>Transferência</option><option>Dinheiro</option>
+                </select>
+                <select name="p3_status" value={formData.p3_status} onChange={handleChange} className={cn("w-full border rounded-lg px-3 py-2 outline-none transition-all text-sm font-medium", formData.p3_status === 'Pago' ? 'bg-green-50 text-green-700 border-green-200' : formData.p3_status === 'Atrasado' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-ivory text-stone border-divider')}>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Pago">Pago</option>
+                  <option value="Atrasado">Atrasado</option>
                 </select>
               </div>
             </div>

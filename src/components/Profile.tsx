@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Loader2, User } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 export default function Profile() {
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     nome_cont: '',
     cpf_cont: '',
@@ -13,26 +15,79 @@ export default function Profile() {
   });
 
   useEffect(() => {
-    const saved = localStorage.getItem('cerimonialista_profile');
-    if (saved) {
-      try {
-        setFormData(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse profile data', e);
-      }
-    }
+    fetchProfile();
   }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('cerimonialista_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        setFormData({
+          nome_cont: data.nome_cont || '',
+          cpf_cont: data.cpf_cont || '',
+          end_cont: data.end_cont || '',
+          cidade_cont: data.cidade_cont || 'Telêmaco Borba / PR',
+          tel_cont: data.tel_cont || '',
+          email_cont: data.email_cont || '',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    localStorage.setItem('cerimonialista_profile', JSON.stringify(formData));
-    setTimeout(() => setSaving(false), 500);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('cerimonialista_profiles')
+        .upsert({
+          id: user.id,
+          ...formData,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      
+      // Also update localStorage for backward compatibility if needed, 
+      // but primary source is now Supabase
+      localStorage.setItem('cerimonialista_profile', JSON.stringify(formData));
+      alert('Perfil salvo com sucesso!');
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      alert('Erro ao salvar perfil.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-rose" />
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
