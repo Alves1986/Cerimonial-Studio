@@ -13,7 +13,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   // Webhook endpoint must use raw body parser
   app.post('/api/webhooks', express.raw({ type: 'application/json' }), async (req, res) => {
@@ -21,6 +21,7 @@ async function startServer() {
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
     if (!sig || !webhookSecret) {
+      console.error('Webhook secret or signature missing');
       return res.status(400).send('Webhook secret or signature missing');
     }
 
@@ -32,6 +33,8 @@ async function startServer() {
       console.error(`Webhook Error: ${err.message}`);
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
+
+    console.log(`Processing webhook event: ${event.type}`);
 
     try {
       switch (event.type) {
@@ -78,6 +81,7 @@ async function startServer() {
   // Regular JSON parser for other endpoints
   app.use(express.json());
 
+  // Create Checkout Session
   app.post('/api/create-checkout', async (req, res) => {
     try {
       const { priceId, userId, email } = req.body;
@@ -87,12 +91,7 @@ async function startServer() {
       }
 
       if (!process.env.STRIPE_SECRET_KEY) {
-        throw new Error('STRIPE_SECRET_KEY is not configured in environment variables.');
-      }
-
-      // Check for mock IDs from the SQL script
-      if (priceId.includes('monthly') && !priceId.startsWith('price_1')) {
-        console.warn(`Attempting to use a potentially mock priceId: ${priceId}`);
+        throw new Error('STRIPE_SECRET_KEY is not configured.');
       }
 
       const customerId = await createOrRetrieveCustomer({
@@ -102,8 +101,9 @@ async function startServer() {
 
       const getBaseUrl = () => {
         if (process.env.APP_URL) return process.env.APP_URL;
-        const protocol = req.get('host')?.includes('localhost') ? 'http' : 'https';
-        return `${protocol}://${req.get('host')}`;
+        const host = req.get('host');
+        const protocol = host?.includes('localhost') || host?.includes('127.0.0.1') ? 'http' : 'https';
+        return `${protocol}://${host}`;
       };
 
       const baseUrl = getBaseUrl();
@@ -113,20 +113,13 @@ async function startServer() {
         billing_address_collection: 'required',
         customer: customerId,
         client_reference_id: userId,
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1
-          }
-        ],
+        line_items: [{ price: priceId, quantity: 1 }],
         mode: 'subscription',
         allow_promotion_codes: true,
         subscription_data: {
-          metadata: {
-            supabase_user_id: userId
-          }
+          metadata: { supabase_user_id: userId }
         },
-        success_url: `${baseUrl}/dashboard`,
+        success_url: `${baseUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/pricing`
       });
 
@@ -137,16 +130,42 @@ async function startServer() {
       res.json({ sessionId: session.id, url: session.url });
     } catch (error: any) {
       console.error('Error creating checkout session:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Create Customer Portal Session
+  app.post('/api/create-portal', async (req, res) => {
+    try {
+      const { userId } = req.body;
       
-      // Provide more helpful messages for common Stripe errors
-      let message = error.message;
-      if (message.includes('No such price')) {
-        message = `O ID do preço (${req.body.priceId}) não foi encontrado no Stripe. Certifique-se de que você criou o produto e o preço no seu Dashboard do Stripe e atualizou o banco de dados com o ID real (que começa com 'price_').`;
-      } else if (message.includes('apiKey')) {
-        message = 'A chave secreta do Stripe (STRIPE_SECRET_KEY) é inválida ou não foi configurada.';
+      if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
       }
-      
-      res.status(500).json({ error: message });
+
+      const customerId = await createOrRetrieveCustomer({
+        uuid: userId,
+        email: '' // Will be retrieved from DB if exists
+      });
+
+      const getBaseUrl = () => {
+        if (process.env.APP_URL) return process.env.APP_URL;
+        const host = req.get('host');
+        const protocol = host?.includes('localhost') || host?.includes('127.0.0.1') ? 'http' : 'https';
+        return `${protocol}://${host}`;
+      };
+
+      const baseUrl = getBaseUrl();
+
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: `${baseUrl}/perfil`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Error creating portal session:', error);
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -165,7 +184,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT as number, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }

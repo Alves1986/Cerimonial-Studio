@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia' as any, // Use any to bypass strict version check if needed, or update to '2025-02-24.acacia' if that's the version
+  apiVersion: '2025-02-24.acacia' as any,
 });
 
 const supabaseAdmin = createClient(
@@ -21,6 +21,7 @@ export const upsertProductRecord = async (product: Stripe.Product) => {
     description: product.description ?? null,
     image: product.images?.[0] ?? null,
     metadata: product.metadata,
+    updated_at: new Date().toISOString()
   };
 
   const { error } = await supabaseAdmin.from('products').upsert([productData]);
@@ -40,6 +41,7 @@ export const upsertPriceRecord = async (price: Stripe.Price) => {
     interval_count: price.recurring?.interval_count ?? null,
     trial_period_days: price.recurring?.trial_period_days ?? null,
     metadata: price.metadata,
+    updated_at: new Date().toISOString()
   };
 
   const { error } = await supabaseAdmin.from('prices').upsert([priceData]);
@@ -58,33 +60,35 @@ export const createOrRetrieveCustomer = async ({
     .from('customers')
     .select('stripe_customer_id')
     .eq('user_id', uuid)
-    .single();
+    .maybeSingle();
 
-  if (error || !data?.stripe_customer_id) {
-    const customerData: { metadata: { supabaseUUID: string }; email?: string } = {
-      metadata: {
-        supabaseUUID: uuid
-      }
-    };
-    if (email) customerData.email = email;
+  if (error) throw error;
 
-    const customer = await stripe.customers.create(customerData);
-
-    const { error: supabaseError } = await supabaseAdmin.from('customers').insert([{
-      user_id: uuid,
-      stripe_customer_id: customer.id
-    }]);
-
-    if (supabaseError) throw supabaseError;
-    console.log(`New customer created and inserted for ${uuid}.`);
-    return customer.id;
+  if (data?.stripe_customer_id) {
+    return data.stripe_customer_id;
   }
 
-  return data.stripe_customer_id;
+  const customerData: Stripe.CustomerCreateParams = {
+    metadata: {
+      supabase_user_id: uuid
+    }
+  };
+  if (email) customerData.email = email;
+
+  const customer = await stripe.customers.create(customerData);
+
+  const { error: supabaseError } = await supabaseAdmin.from('customers').insert([{
+    user_id: uuid,
+    stripe_customer_id: customer.id
+  }]);
+
+  if (supabaseError) throw supabaseError;
+  console.log(`New customer created and mapped for user: ${uuid}`);
+  return customer.id;
 };
 
 const toDateTime = (secs: number) => {
-  var t = new Date('1970-01-01T00:00:00Z'); // Corrected Epoch
+  var t = new Date('1970-01-01T00:00:00Z');
   t.setSeconds(secs);
   return t.toISOString();
 };
@@ -112,20 +116,18 @@ export const upsertSubscription = async (
     quantity: subscription.items.data[0].quantity,
     cancel_at_period_end: subscription.cancel_at_period_end,
     created: toDateTime(subscription.created),
-    current_period_start: toDateTime((subscription as any).current_period_start || subscription.created),
-    current_period_end: toDateTime((subscription as any).current_period_end || subscription.created),
+    current_period_start: toDateTime(subscription.current_period_start),
+    current_period_end: toDateTime(subscription.current_period_end),
     ended_at: subscription.ended_at ? toDateTime(subscription.ended_at) : null,
     cancel_at: subscription.cancel_at ? toDateTime(subscription.cancel_at) : null,
     canceled_at: subscription.canceled_at ? toDateTime(subscription.canceled_at) : null,
     trial_start: subscription.trial_start ? toDateTime(subscription.trial_start) : null,
     trial_end: subscription.trial_end ? toDateTime(subscription.trial_end) : null,
     metadata: subscription.metadata,
+    updated_at: new Date().toISOString()
   };
 
-  const { error } = await supabaseAdmin
-    .from('subscriptions')
-    .upsert([subscriptionData]);
-
+  const { error } = await supabaseAdmin.from('subscriptions').upsert([subscriptionData]);
   if (error) throw error;
-  console.log(`Inserted/updated subscription [${subscription.id}] for user [${uuid}]`);
+  console.log(`Subscription ${isCreateAction ? 'created' : 'updated'} for user: ${uuid}`);
 };
