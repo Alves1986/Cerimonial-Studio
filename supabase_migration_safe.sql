@@ -1,4 +1,4 @@
--- SCRIPT DE MIGRAÇÃO SEGURA - CERIMONIAL STUDIO SAAS
+-- SCRIPT DE MIGRAÇÃO SEGURA (CORRIGIDO) - CERIMONIAL STUDIO SAAS
 -- Este script ajusta as tabelas existentes para o novo sistema SaaS sem apagar dados.
 
 -- 1. Garantir que as tabelas de Stripe existam com as colunas corretas
@@ -95,13 +95,13 @@ CREATE POLICY "Can only view own subs" ON public.subscriptions FOR SELECT USING 
 
 -- Dados de Negócio: Usuário só vê/edita o que é dele
 DROP POLICY IF EXISTS "Users can manage own couples" ON public.couples;
-CREATE POLICY "Users can manage own couples" ON public.couples ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own couples" ON public.couples FOR ALL USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can manage own planners" ON public.planners;
-CREATE POLICY "Users can manage own planners" ON public.planners ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own planners" ON public.planners FOR ALL USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can manage own checklists" ON public.checklists;
-CREATE POLICY "Users can manage own checklists" ON public.checklists ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own checklists" ON public.checklists FOR ALL USING (auth.uid() = user_id);
 
 -- 5. Função RPC para verificar o plano do usuário (Usada pelo Frontend)
 CREATE OR REPLACE FUNCTION public.get_user_plan(user_uuid uuid)
