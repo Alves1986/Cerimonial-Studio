@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Couple } from '../types/database';
-import { Loader2, Save, Copy, RotateCcw, ChevronRight, MessageSquare, Sparkles, Check } from 'lucide-react';
+import { Loader2, Save, CheckCircle, Copy, RefreshCw, Lock } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useToast } from './Toast';
-import { PlanGuard } from './PlanGuard';
 
 const DEFAULT_ROTEIROS = [
-  { title: 'Abertura e Boas-vindas', text: 'Boa noite a todos! É com imensa alegria que nos reunimos hoje para celebrar o amor de [Nome1] e [Nome2]. Sejam todos muito bem-vindos a este momento único e especial.' },
-  { title: 'Entrada do Cortejo', text: 'Neste momento, daremos início ao cortejo. Convidamos a todos para que acompanhem com carinho a entrada daqueles que fazem parte da história deste casal.' },
-  { title: 'Entrada da Noiva', text: 'E agora, o momento mais aguardado. Por favor, todos de pé para recebermos a noiva, [Nome da noiva], que caminha ao encontro do seu destino.' },
-  { title: 'Palavras do Celebrante', text: 'O amor é paciente, o amor é bondoso. Não inveja, não se vangloria, não se orgulha. Hoje, [Nome1] e [Nome2] decidem unir suas vidas sob este sentimento.' },
-  { title: 'Troca de Alianças', text: 'As alianças são o símbolo de um círculo sem fim, assim como deve ser o amor de vocês. Que ao olharem para elas, lembrem-se sempre da promessa feita hoje.' },
-  { title: 'Cumprimentos e Saída', text: 'Com a bênção de todos, eu os declaro casados! Podem se beijar. Vamos celebrar a saída dos recém-casados com muita alegria!' },
+  { title: 'Abertura da cerimônia', text: '"Boa tarde a todos. Em nome de [Nome1] e [Nome2], sejam muito bem-vindos a este momento tão especial. Pedimos, gentilmente, que mantenham os celulares no modo silencioso durante a cerimônia, para que possamos viver juntos cada instante com toda a emoção que ele merece. Em breve, nossa cerimônia terá início."' },
+  { title: 'Chamada para a entrada da noiva', text: '"Pedimos a todos que se levantem, por favor."' },
+  { title: 'Entrada triunfal na recepção', text: '"Senhoras e senhores, apresento a vocês, pela primeira vez como marido e mulher: [Nome1] e [Nome2]!"' },
+  { title: 'Primeira dança', text: '"Convidamos o casal para o seu primeiro momento como marido e mulher: a valsa. [Nome1] e [Nome2], o salão é de vocês."' },
+  { title: 'Corte do bolo', text: '"Um dos momentos mais especiais desta noite chegou. Convidamos [Nome1] e [Nome2] para o corte do bolo."' },
+  { title: 'Brinde oficial', text: '"Com os copos em mãos, brindemos juntos à nova família que se inicia aqui esta noite. Saúde, amor e vida longa para [Nome1] e [Nome2]."' },
+  { title: 'Jogar o bouquet', text: '"Solteiras, este momento é de vocês. Posicionem-se atrás da noiva — quem pegar o buquê será a próxima a celebrar o amor. [Nome da noiva], quando estiver pronta."' },
+  { title: 'Encerramento', text: '"É chegada a hora de encerrarmos nossa celebração. Em nome de [Nome1] e [Nome2], muito obrigado a cada um de vocês por fazerem parte deste dia único. Boa noite a todos."' },
 ];
 
 export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, onUpgrade: () => void }) {
@@ -22,19 +22,10 @@ export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, on
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
-  const { showToast } = useToast();
 
   useEffect(() => {
     fetchCouples();
   }, []);
-
-  useEffect(() => {
-    if (selectedCoupleId) {
-      fetchRoteiros(selectedCoupleId);
-    } else {
-      setRoteiros([]);
-    }
-  }, [selectedCoupleId]);
 
   const fetchCouples = async () => {
     try {
@@ -43,7 +34,6 @@ export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, on
       setCouples(data || []);
     } catch (error) {
       console.error('Error fetching couples:', error);
-      showToast('Erro ao carregar casais.', 'error');
     } finally {
       setLoading(false);
     }
@@ -62,24 +52,34 @@ export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, on
       if (data && data.data) {
         setRoteiros(data.data);
       } else {
-        // Hydrate default template with couple names
+        // Auto-fill from template
         const couple = couples.find(c => c.id === coupleId);
-        const hydrated = DEFAULT_ROTEIROS.map(r => ({
-          ...r,
-          text: r.text
-            .replace(/\[Nome1\]/g, couple?.name1 || 'Noivo(a) 1')
-            .replace(/\[Nome2\]/g, couple?.name2 || 'Noivo(a) 2')
-            .replace(/\[Nome da noiva\]/g, couple?.name2 || 'Noiva')
-        }));
-        setRoteiros(hydrated);
+        if (couple) {
+          const filled = DEFAULT_ROTEIROS.map(r => ({
+            ...r,
+            text: r.text
+              .replace(/\[Nome1\]/g, couple.name1)
+              .replace(/\[Nome2\]/g, couple.name2)
+              .replace(/\[Nome da noiva\]/g, couple.name1) // Fallback
+          }));
+          setRoteiros(filled);
+        }
       }
     } catch (error) {
       console.error('Error fetching roteiros:', error);
     }
   };
 
+  useEffect(() => {
+    if (selectedCoupleId) {
+      fetchRoteiros(selectedCoupleId);
+    } else {
+      setRoteiros([]);
+    }
+  }, [selectedCoupleId]);
+
   const handleSave = async () => {
-    if (!selectedCoupleId) return showToast('Selecione um casal primeiro.', 'info');
+    if (!selectedCoupleId) return;
     setSaving(true);
 
     try {
@@ -96,131 +96,143 @@ export default function Roteiros({ userPlan, onUpgrade }: { userPlan: string, on
         }, { onConflict: 'couple_id' });
 
       if (error) throw error;
-      showToast('Roteiros salvos com sucesso!', 'success');
+      alert('Roteiro salvo com sucesso!');
     } catch (error) {
       console.error('Error saving roteiros:', error);
-      showToast('Erro ao salvar roteiros.', 'error');
+      alert('Erro ao salvar roteiro.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCopy = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIdx(idx);
-    showToast('Texto copiado para a área de transferência.', 'success');
-    setTimeout(() => setCopiedIdx(null), 2000);
+  const handleTextChange = (idx: number, newText: string) => {
+    setRoteiros(prev => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], text: newText };
+      return next;
+    });
   };
 
   const handleReset = () => {
-    if (!confirm('Deseja resetar para o modelo padrão? Todas as alterações serão perdidas.')) return;
-    const couple = couples.find(c => c.id === selectedCoupleId);
-    const hydrated = DEFAULT_ROTEIROS.map(r => ({
-      ...r,
-      text: r.text
-        .replace(/\[Nome1\]/g, couple?.name1 || 'Noivo(a) 1')
-        .replace(/\[Nome2\]/g, couple?.name2 || 'Noivo(a) 2')
-        .replace(/\[Nome da noiva\]/g, couple?.name2 || 'Noiva')
-    }));
-    setRoteiros(hydrated);
-    showToast('Roteiro resetado para o padrão.', 'info');
+    if (!selectedCoupleId) return;
+    if (window.confirm('Deseja resetar para o texto padrão? Suas edições serão perdidas.')) {
+      const couple = couples.find(c => c.id === selectedCoupleId);
+      if (couple) {
+        const filled = DEFAULT_ROTEIROS.map(r => ({
+          ...r,
+          text: r.text
+            .replace(/\[Nome1\]/g, couple.name1)
+            .replace(/\[Nome2\]/g, couple.name2)
+            .replace(/\[Nome da noiva\]/g, couple.name1)
+        }));
+        setRoteiros(filled);
+      }
+    }
+  };
+
+  const copyToClipboard = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 2000);
   };
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-rose" /></div>;
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-rose" />
+      </div>
+    );
+  }
+
+  if (!userPlan?.includes('Pro')) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 bg-white border border-divider rounded-2xl shadow-sm animate-page-in">
+        <div className="w-20 h-20 bg-blush rounded-full flex items-center justify-center mb-6">
+          <Lock className="text-rose w-10 h-10" />
+        </div>
+        <h3 className="font-display text-2xl text-ink mb-3">Funcionalidade Exclusiva</h3>
+        <p className="text-stone font-light text-center max-w-md mb-8">
+          O acesso a roteiros de fala personalizados e editáveis é um recurso exclusivo do <strong>Plano Pro</strong>. 
+          Faça o upgrade agora para ter acesso a todos os roteiros!
+        </p>
+        <button
+          onClick={onUpgrade}
+          className="bg-rose hover:bg-rose-dark text-white font-bold py-3 px-10 rounded-xl transition-all shadow-lg shadow-rose/20 uppercase text-sm tracking-widest"
+        >
+          Fazer Upgrade para Pro
+        </button>
+      </div>
+    );
   }
 
   return (
-    <PlanGuard requirePro onUpgrade={onUpgrade}>
-      <div className="animate-page-in">
-        <div className="mb-8 pb-6 border-b border-divider flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div>
-            <h2 className="text-3xl font-display font-medium text-ink">Roteiros de Fala</h2>
-            <p className="text-stone text-sm font-light mt-1">Modelos de fala profissionais para o mestre de cerimônias</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative">
-              <select
-                value={selectedCoupleId}
-                onChange={(e) => setSelectedCoupleId(e.target.value)}
-                className="bg-white border border-divider rounded-xl px-4 py-3 outline-none focus:border-rose focus:ring-4 focus:ring-rose/5 transition-all text-sm min-w-[240px] appearance-none pr-10 shadow-sm"
-              >
-                <option value="">Selecionar casal</option>
-                {couples.map(c => (
-                  <option key={c.id} value={c.id}>{c.name1} & {c.name2}</option>
-                ))}
-              </select>
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-stone">
-                <ChevronRight className="w-4 h-4 rotate-90" />
-              </div>
-            </div>
-            <button
-              onClick={handleReset}
-              disabled={!selectedCoupleId}
-              className="bg-ivory hover:bg-linen text-stone font-bold py-3 px-6 rounded-xl transition-all flex items-center gap-2 uppercase text-[10px] tracking-widest border border-divider disabled:opacity-50"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Resetar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !selectedCoupleId}
-              className="bg-rose hover:bg-rose-dark text-white font-bold py-3 px-6 rounded-xl transition-all flex items-center gap-2 uppercase text-[10px] tracking-widest shadow-lg shadow-rose/20 disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Salvar Roteiro
-            </button>
-          </div>
+    <div className="animate-page-in">
+      <div className="mb-8 pb-6 border-b border-divider flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+        <div>
+          <h2 className="text-3xl font-display font-medium text-ink">Roteiros de Fala</h2>
+          <p className="text-stone text-sm font-light mt-1">Textos de referência personalizados para cada casal</p>
         </div>
-
-        {!selectedCoupleId ? (
-          <div className="text-center py-20 bg-white border border-divider rounded-3xl shadow-sm">
-            <div className="w-20 h-20 bg-blush rounded-full flex items-center justify-center mx-auto mb-6">
-              <MessageSquare className="text-rose w-10 h-10" />
-            </div>
-            <h3 className="font-display text-2xl text-ink mb-2">Selecione um Casal</h3>
-            <p className="text-stone font-light max-w-xs mx-auto">Escolha um casal acima para gerar e editar os roteiros de fala personalizados.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {roteiros.map((roteiro, idx) => (
-              <div key={idx} className="bg-white border border-divider rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
-                <div className="bg-ivory/50 p-4 border-b border-divider flex justify-between items-center">
-                  <h4 className="font-display text-base font-medium text-ink flex items-center gap-2">
-                    <span className="w-6 h-6 bg-rose/10 text-rose text-[10px] font-bold rounded-full flex items-center justify-center">{idx + 1}</span>
-                    {roteiro.title}
-                  </h4>
-                  <button
-                    onClick={() => handleCopy(roteiro.text, idx)}
-                    className={cn(
-                      "p-2 rounded-lg transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest",
-                      copiedIdx === idx ? "bg-green-50 text-green-600" : "hover:bg-white text-stone hover:text-rose"
-                    )}
-                  >
-                    {copiedIdx === idx ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedIdx === idx ? 'Copiado' : 'Copiar'}
-                  </button>
-                </div>
-                <textarea
-                  value={roteiro.text}
-                  onChange={(e) => {
-                    const newR = [...roteiros];
-                    newR[idx].text = e.target.value;
-                    setRoteiros(newR);
-                  }}
-                  className="p-6 text-sm text-ink-light font-light leading-relaxed min-h-[160px] outline-none focus:bg-ivory/20 transition-all resize-none scrollbar-hide"
-                  placeholder="Escreva o roteiro aqui..."
-                />
-                <div className="px-6 py-3 bg-linen/10 border-t border-divider/50 flex justify-end">
-                  <div className="text-[10px] font-bold text-stone/30 uppercase tracking-widest flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Editável Pro
-                  </div>
-                </div>
-              </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={selectedCoupleId}
+            onChange={(e) => setSelectedCoupleId(e.target.value)}
+            className="bg-ivory border border-divider rounded-lg px-4 py-2 outline-none focus:border-rose transition-all text-sm min-w-[200px]"
+          >
+            <option value="">Selecionar casal</option>
+            {couples.map(c => (
+              <option key={c.id} value={c.id}>{c.name1} & {c.name2}</option>
             ))}
-          </div>
-        )}
+          </select>
+          
+          {selectedCoupleId && (
+            <>
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider text-stone hover:text-ink transition-all"
+                title="Resetar para o padrão"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider text-white bg-rose hover:bg-rose-dark rounded-lg transition-all disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </PlanGuard>
+
+      {!selectedCoupleId ? (
+        <div className="bg-ivory border border-dashed border-divider rounded-2xl p-12 text-center">
+          <p className="text-stone font-light">Selecione um casal para visualizar e editar os roteiros personalizados.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {roteiros.map((roteiro, idx) => (
+            <div key={idx} className="bg-white border border-divider rounded-xl p-6 shadow-sm group">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="font-display text-lg font-medium text-ink">{roteiro.title}</h4>
+                <button
+                  onClick={() => copyToClipboard(roteiro.text, idx)}
+                  className="p-2 text-stone hover:text-rose transition-all rounded-lg hover:bg-blush"
+                  title="Copiar texto"
+                >
+                  {copiedIdx === idx ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+              <textarea
+                value={roteiro.text}
+                onChange={(e) => handleTextChange(idx, e.target.value)}
+                rows={4}
+                className="w-full bg-champagne p-4 rounded-lg border-l-4 border-blush-mid text-ink-light font-light italic text-sm leading-relaxed outline-none focus:border-rose transition-all resize-none"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

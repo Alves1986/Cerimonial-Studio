@@ -1,8 +1,7 @@
 import React from 'react';
-import { Heart, LayoutDashboard, Users, ClipboardList, CheckSquare, FileText, MessageSquare, AlertTriangle, LogOut, User, Sparkles } from 'lucide-react';
+import { Heart, LayoutDashboard, Users, ClipboardList, CheckSquare, FileText, MessageSquare, AlertTriangle, LogOut, User } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
-import { useToast } from './Toast';
 
 interface SidebarProps {
   activePage: string;
@@ -13,8 +12,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, userPlan }: SidebarProps) {
-  const { showToast } = useToast();
-  
   const navItems = [
     { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard, group: 'Principal' },
     { id: 'casais', label: 'Meus Casais', icon: Users, group: 'Principal' },
@@ -31,7 +28,6 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, 
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    showToast('Sessão encerrada com sucesso.', 'info');
   };
 
   return (
@@ -44,13 +40,13 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, 
           <span className="font-display italic text-rose-dark text-lg">C</span>
         </div>
         <h1 className="font-display text-lg font-medium text-ink tracking-tight">Cerimonial Studio</h1>
-        <p className="text-[10px] font-bold text-stone tracking-[0.2em] uppercase mt-2">Gestão Profissional</p>
+        <p className="text-[10px] font-light text-stone tracking-[0.15em] uppercase mt-1">Gestão Profissional</p>
       </div>
 
-      <nav className="flex-1 py-6 overflow-y-auto scrollbar-hide">
+      <nav className="flex-1 py-6 overflow-y-auto">
         {groups.map(group => (
-          <div key={group} className="mb-4">
-            <div className="px-8 py-2 text-[10px] font-bold text-stone/40 tracking-[0.2em] uppercase">
+          <div key={group}>
+            <div className="px-8 py-4 text-[10px] font-bold text-blush-mid tracking-[0.14em] uppercase">
               {group}
             </div>
             {navItems.filter(item => item.group === group).map(item => (
@@ -61,9 +57,9 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, 
                   if (setIsOpen) setIsOpen(false);
                 }}
                 className={cn(
-                  "w-full flex items-center gap-3 px-8 py-3 text-sm transition-all border-l-4",
+                  "w-full flex items-center gap-3 px-8 py-3 text-sm transition-all border-l-2",
                   activePage === item.id
-                    ? "text-rose-dark font-bold border-rose bg-blush/30"
+                    ? "text-rose-dark font-bold border-rose bg-blush"
                     : "text-stone font-normal border-transparent hover:text-ink hover:bg-ivory"
                 )}
               >
@@ -75,29 +71,16 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, 
         ))}
       </nav>
 
-      <div className="p-6 border-t border-divider bg-ivory/50">
+      <div className="p-6 border-t border-divider">
         {userPlan && (
-          <div className={cn(
-            "mb-4 p-4 rounded-xl border transition-all",
-            userPlan === 'free' 
-              ? "bg-white border-divider" 
-              : "bg-rose/5 border-rose/20 shadow-sm"
-          )}>
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className={cn("w-3 h-3", userPlan === 'free' ? "text-stone" : "text-rose")} />
-              <div className="text-[10px] font-bold text-stone uppercase tracking-widest">Plano Atual</div>
-            </div>
+          <div className="mb-4 p-3 bg-ivory border border-divider rounded-lg">
+            <div className="text-[10px] font-bold text-stone uppercase tracking-widest mb-1">Seu Plano</div>
             <div className="flex items-center justify-between">
-              <span className={cn(
-                "text-xs font-bold uppercase tracking-wider",
-                userPlan === 'free' ? "text-ink" : "text-rose-dark"
-              )}>
-                {userPlan === 'free' ? 'Gratuito' : userPlan}
-              </span>
+              <span className="text-xs font-bold text-rose-dark capitalize">{userPlan}</span>
               {userPlan === 'free' && (
                 <button 
                   onClick={() => setActivePage('pricing')}
-                  className="text-[10px] text-rose hover:text-rose-dark font-bold uppercase tracking-widest underline underline-offset-4"
+                  className="text-[10px] text-rose hover:underline font-bold uppercase"
                 >
                   Upgrade
                 </button>
@@ -107,11 +90,14 @@ export default function Sidebar({ activePage, setActivePage, isOpen, setIsOpen, 
         )}
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-2 py-2 text-xs font-bold uppercase tracking-widest text-stone hover:text-red-500 transition-colors"
+          className="w-full flex items-center gap-3 px-2 py-2 text-sm text-stone hover:text-red-500 transition-colors"
         >
           <LogOut className="w-4 h-4" />
           Sair do Sistema
         </button>
+        <div className="mt-4 text-[10px] font-light text-stone tracking-wider">
+          <strong>Telêmaco Borba</strong> — Paraná
+        </div>
       </div>
     </aside>
   );
